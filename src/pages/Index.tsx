@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Slider } from '@/components/ui/slider';
 import Icon from '@/components/ui/icon';
 
 type Holiday = 'newyear' | 'birthday' | 'valentine';
@@ -18,6 +19,13 @@ interface Template {
   emoji: string;
 }
 
+interface Sticker {
+  emoji: string;
+  id: string;
+  position: { x: number; y: number };
+  size: number;
+}
+
 const Index = () => {
   const [selectedHoliday, setSelectedHoliday] = useState<Holiday>('newyear');
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -25,6 +33,9 @@ const Index = () => {
   const [greetingText, setGreetingText] = useState('');
   const [exportFormat, setExportFormat] = useState('png');
   const [exportQuality, setExportQuality] = useState('high');
+  const [textSize, setTextSize] = useState(24);
+  const [selectedFont, setSelectedFont] = useState('cormorant');
+  const [stickers, setStickers] = useState<Sticker[]>([]);
 
   const templates: Template[] = [
     { id: 1, title: 'Снежная сказка', holiday: 'newyear', bgColor: 'from-blue-100 to-purple-100', emoji: '❄️' },
@@ -38,6 +49,19 @@ const Index = () => {
     { id: 9, title: 'Нежность', holiday: 'valentine', bgColor: 'from-rose-100 to-red-100', emoji: '💖' },
   ];
 
+  const fonts = [
+    { value: 'cormorant', label: 'Cormorant (элегантный)', family: 'Cormorant, serif' },
+    { value: 'opensans', label: 'Open Sans (классический)', family: 'Open Sans, sans-serif' },
+    { value: 'cursive', label: 'Рукописный', family: 'cursive' },
+    { value: 'serif', label: 'С засечками', family: 'serif' },
+  ];
+
+  const stickersByHoliday = {
+    newyear: ['❄️', '⛄', '🎄', '🎅', '🎁', '✨', '⭐', '🌟', '🔔', '🕯️', '🎊', '🎉'],
+    birthday: ['🎂', '🎈', '🎉', '🎊', '🎁', '🧁', '🍰', '🎀', '🥳', '🪅', '🎇', '🎆'],
+    valentine: ['❤️', '💕', '💖', '💗', '💘', '💝', '💞', '💓', '😍', '🥰', '😘', '🌹', '💐', '👼', '💑', '💏'],
+  };
+
   const filteredTemplates = templates.filter(t => t.holiday === selectedHoliday);
 
   const holidays = [
@@ -49,12 +73,31 @@ const Index = () => {
   const openEditor = (template: Template) => {
     setSelectedTemplate(template);
     setGreetingText('');
+    setStickers([]);
+    setTextSize(24);
+    setSelectedFont('cormorant');
     setIsEditorOpen(true);
+  };
+
+  const addSticker = (emoji: string) => {
+    const newSticker: Sticker = {
+      emoji,
+      id: Date.now().toString(),
+      position: { x: Math.random() * 60 + 20, y: Math.random() * 60 + 20 },
+      size: 48,
+    };
+    setStickers([...stickers, newSticker]);
+  };
+
+  const removeSticker = (id: string) => {
+    setStickers(stickers.filter(s => s.id !== id));
   };
 
   const handleExport = () => {
     alert(`Открытка экспортирована в формате ${exportFormat.toUpperCase()} с качеством ${exportQuality}`);
   };
+
+  const selectedFontFamily = fonts.find(f => f.value === selectedFont)?.family || 'Cormorant, serif';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50">
@@ -150,20 +193,46 @@ const Index = () => {
       </main>
 
       <Dialog open={isEditorOpen} onOpenChange={setIsEditorOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-2xl">Редактор открытки</DialogTitle>
           </DialogHeader>
           
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid lg:grid-cols-[1fr_400px] gap-6">
             <div>
               <h4 className="text-lg font-semibold mb-4">Предпросмотр</h4>
               {selectedTemplate && (
-                <div className={`aspect-[4/3] bg-gradient-to-br ${selectedTemplate.bgColor} rounded-lg flex items-center justify-center relative shadow-lg`}>
-                  <div className="text-9xl mb-8">{selectedTemplate.emoji}</div>
+                <div className={`aspect-[4/3] bg-gradient-to-br ${selectedTemplate.bgColor} rounded-lg flex items-center justify-center relative shadow-lg overflow-hidden`}>
+                  <div className="text-9xl mb-8 animate-float">{selectedTemplate.emoji}</div>
+                  
+                  {stickers.map((sticker) => (
+                    <div
+                      key={sticker.id}
+                      className="absolute cursor-pointer hover:scale-110 transition-transform group"
+                      style={{
+                        left: `${sticker.position.x}%`,
+                        top: `${sticker.position.y}%`,
+                        fontSize: `${sticker.size}px`,
+                      }}
+                      onClick={() => removeSticker(sticker.id)}
+                    >
+                      {sticker.emoji}
+                      <div className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Icon name="X" size={12} className="text-white" />
+                      </div>
+                    </div>
+                  ))}
+                  
                   {greetingText && (
-                    <div className="absolute inset-0 flex items-center justify-center p-8">
-                      <p className="text-2xl font-semibold text-center text-primary/80 bg-white/70 backdrop-blur-sm rounded-lg p-6">
+                    <div className="absolute inset-0 flex items-center justify-center p-8 pointer-events-none">
+                      <p 
+                        className="text-center text-primary/90 bg-white/75 backdrop-blur-sm rounded-lg p-6 shadow-lg"
+                        style={{ 
+                          fontSize: `${textSize}px`,
+                          fontFamily: selectedFontFamily,
+                          fontWeight: 600,
+                        }}
+                      >
                         {greetingText}
                       </p>
                     </div>
@@ -172,56 +241,141 @@ const Index = () => {
               )}
             </div>
 
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium mb-2">Текст поздравления</label>
-                <Textarea
-                  placeholder="Введите текст поздравления..."
-                  value={greetingText}
-                  onChange={(e) => setGreetingText(e.target.value)}
-                  rows={4}
-                  className="resize-none"
-                />
-              </div>
+            <div>
+              <Tabs defaultValue="text" className="w-full">
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="text">Текст</TabsTrigger>
+                  <TabsTrigger value="stickers">Стикеры</TabsTrigger>
+                  <TabsTrigger value="export">Экспорт</TabsTrigger>
+                </TabsList>
 
-              <div>
-                <label className="block text-sm font-medium mb-2">Формат экспорта</label>
-                <Select value={exportFormat} onValueChange={setExportFormat}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="png">PNG</SelectItem>
-                    <SelectItem value="jpeg">JPEG</SelectItem>
-                    <SelectItem value="gif">GIF (анимация)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                <TabsContent value="text" className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Текст поздравления</label>
+                    <Textarea
+                      placeholder="Введите текст поздравления..."
+                      value={greetingText}
+                      onChange={(e) => setGreetingText(e.target.value)}
+                      rows={4}
+                      className="resize-none"
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-2">Качество</label>
-                <Select value={exportQuality} onValueChange={setExportQuality}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Низкое (быстрая загрузка)</SelectItem>
-                    <SelectItem value="medium">Среднее</SelectItem>
-                    <SelectItem value="high">Высокое</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Шрифт</label>
+                    <Select value={selectedFont} onValueChange={setSelectedFont}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {fonts.map(font => (
+                          <SelectItem key={font.value} value={font.value}>
+                            <span style={{ fontFamily: font.family }}>{font.label}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-              <div className="flex gap-3">
-                <Button onClick={handleExport} className="flex-1 gap-2">
-                  <Icon name="Download" size={18} />
-                  Экспортировать
-                </Button>
-                <Button variant="outline" className="flex-1 gap-2">
-                  <Icon name="Share2" size={18} />
-                  Поделиться
-                </Button>
-              </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Размер текста: {textSize}px
+                    </label>
+                    <Slider
+                      value={[textSize]}
+                      onValueChange={(value) => setTextSize(value[0])}
+                      min={16}
+                      max={48}
+                      step={2}
+                      className="w-full"
+                    />
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="stickers" className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-3">
+                      Тематические стикеры
+                      <span className="text-xs text-muted-foreground ml-2">(нажмите чтобы добавить)</span>
+                    </label>
+                    <div className="grid grid-cols-6 gap-2">
+                      {selectedTemplate && stickersByHoliday[selectedTemplate.holiday].map((emoji, index) => (
+                        <Button
+                          key={index}
+                          variant="outline"
+                          className="h-14 text-3xl hover:scale-110 transition-transform"
+                          onClick={() => addSticker(emoji)}
+                        >
+                          {emoji}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {stickers.length > 0 && (
+                    <div className="p-4 bg-muted rounded-lg">
+                      <p className="text-sm text-muted-foreground mb-2">
+                        Добавлено стикеров: {stickers.length}
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        onClick={() => setStickers([])}
+                      >
+                        <Icon name="Trash2" size={14} />
+                        Удалить все
+                      </Button>
+                    </div>
+                  )}
+
+                  <div className="text-xs text-muted-foreground p-3 bg-accent/50 rounded-lg">
+                    <Icon name="Info" size={14} className="inline mr-1" />
+                    Кликните на стикер в превью, чтобы удалить его
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="export" className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Формат экспорта</label>
+                    <Select value={exportFormat} onValueChange={setExportFormat}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="png">PNG</SelectItem>
+                        <SelectItem value="jpeg">JPEG</SelectItem>
+                        <SelectItem value="gif">GIF (анимация)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Качество</label>
+                    <Select value={exportQuality} onValueChange={setExportQuality}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">Низкое (быстрая загрузка)</SelectItem>
+                        <SelectItem value="medium">Среднее</SelectItem>
+                        <SelectItem value="high">Высокое (лучшее качество)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex flex-col gap-3 pt-4">
+                    <Button onClick={handleExport} size="lg" className="w-full gap-2">
+                      <Icon name="Download" size={18} />
+                      Скачать открытку
+                    </Button>
+                    <Button variant="outline" size="lg" className="w-full gap-2">
+                      <Icon name="Share2" size={18} />
+                      Поделиться
+                    </Button>
+                  </div>
+                </TabsContent>
+              </Tabs>
             </div>
           </div>
         </DialogContent>
