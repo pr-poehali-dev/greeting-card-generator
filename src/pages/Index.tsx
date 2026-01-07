@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import html2canvas from 'html2canvas';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -7,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
+import { toast } from '@/components/ui/sonner';
 import Icon from '@/components/ui/icon';
 
 type Holiday = 'newyear' | 'birthday' | 'valentine';
@@ -47,8 +49,10 @@ const Index = () => {
     position: { x: 50, y: 50 }, 
     isDragging: false 
   });
+  const [isExporting, setIsExporting] = useState(false);
   
   const previewRef = useRef<HTMLDivElement>(null);
+  const exportRef = useRef<HTMLDivElement>(null);
 
   const templates: Template[] = [
     { id: 1, title: 'Снежная сказка', holiday: 'newyear', bgColor: 'from-blue-100 to-purple-100', emoji: '❄️' },
@@ -180,8 +184,54 @@ const Index = () => {
     ));
   };
 
-  const handleExport = () => {
-    alert(`Открытка экспортирована в формате ${exportFormat.toUpperCase()} с качеством ${exportQuality}`);
+  const handleExport = async () => {
+    if (!exportRef.current || !selectedTemplate) {
+      toast.error('Ошибка', { description: 'Не удалось создать открытку' });
+      return;
+    }
+
+    setIsExporting(true);
+    toast.info('Генерация открытки...', { description: 'Пожалуйста, подождите' });
+
+    try {
+      const scale = exportQuality === 'high' ? 3 : exportQuality === 'medium' ? 2 : 1;
+      
+      const canvas = await html2canvas(exportRef.current, {
+        scale,
+        useCORS: true,
+        backgroundColor: null,
+        logging: false,
+      });
+
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            toast.error('Ошибка экспорта', { description: 'Не удалось создать файл' });
+            setIsExporting(false);
+            return;
+          }
+
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          const fileName = `открытка-${selectedTemplate.title.toLowerCase().replace(/\s+/g, '-')}.${exportFormat}`;
+          link.href = url;
+          link.download = fileName;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+
+          toast.success('Готово!', { description: `Открытка сохранена как ${fileName}` });
+          setIsExporting(false);
+        },
+        `image/${exportFormat}`,
+        exportFormat === 'jpeg' ? 0.95 : 1
+      );
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error('Ошибка', { description: 'Не удалось экспортировать открытку' });
+      setIsExporting(false);
+    }
   };
 
   const selectedFontFamily = fonts.find(f => f.value === selectedFont)?.family || 'Cormorant, serif';
@@ -528,9 +578,23 @@ const Index = () => {
                   </div>
 
                   <div className="flex flex-col gap-3 pt-4">
-                    <Button onClick={handleExport} size="lg" className="w-full gap-2">
-                      <Icon name="Download" size={18} />
-                      Скачать открытку
+                    <Button 
+                      onClick={handleExport} 
+                      size="lg" 
+                      className="w-full gap-2"
+                      disabled={isExporting}
+                    >
+                      {isExporting ? (
+                        <>
+                          <Icon name="Loader2" size={18} className="animate-spin" />
+                          Генерация...
+                        </>
+                      ) : (
+                        <>
+                          <Icon name="Download" size={18} />
+                          Скачать открытку
+                        </>
+                      )}
                     </Button>
                     <Button variant="outline" size="lg" className="w-full gap-2">
                       <Icon name="Share2" size={18} />
@@ -543,6 +607,57 @@ const Index = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      <div className="fixed -left-[9999px] -top-[9999px]">
+        {selectedTemplate && (
+          <div 
+            ref={exportRef}
+            className={`w-[1200px] h-[900px] bg-gradient-to-br ${customBgColor} flex items-center justify-center relative`}
+            style={{ fontFamily: selectedFontFamily }}
+          >
+            <div className="text-[180px] absolute" style={{ top: '45%', left: '50%', transform: 'translate(-50%, -50%)' }}>
+              {selectedTemplate.emoji}
+            </div>
+            
+            {stickers.map((sticker) => (
+              <div
+                key={sticker.id}
+                className="absolute"
+                style={{
+                  left: `${sticker.position.x}%`,
+                  top: `${sticker.position.y}%`,
+                  fontSize: `${sticker.size * 2}px`,
+                  transform: 'translate(-50%, -50%)',
+                }}
+              >
+                {sticker.emoji}
+              </div>
+            ))}
+            
+            {greetingText && (
+              <div 
+                className="absolute"
+                style={{
+                  left: `${textSettings.position.x}%`,
+                  top: `${textSettings.position.y}%`,
+                  transform: 'translate(-50%, -50%)',
+                }}
+              >
+                <p 
+                  className="text-center text-primary/90 bg-white/75 backdrop-blur-sm rounded-lg p-12 shadow-lg"
+                  style={{ 
+                    fontSize: `${textSize * 2}px`,
+                    fontFamily: selectedFontFamily,
+                    fontWeight: 600,
+                  }}
+                >
+                  {greetingText}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       <footer className="bg-white/80 backdrop-blur-sm border-t border-purple-100 mt-20">
         <div className="container mx-auto px-6 py-8 text-center text-muted-foreground">
