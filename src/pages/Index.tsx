@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import html2canvas from 'html2canvas';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -8,7 +9,6 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
-import { toast } from '@/components/ui/sonner';
 import Icon from '@/components/ui/icon';
 
 type Holiday = 'newyear' | 'birthday' | 'valentine';
@@ -184,6 +184,31 @@ const Index = () => {
     ));
   };
 
+  const generateCardBlob = async (): Promise<Blob | null> => {
+    if (!exportRef.current) return null;
+
+    try {
+      const scale = exportQuality === 'high' ? 3 : exportQuality === 'medium' ? 2 : 1;
+      const canvas = await html2canvas(exportRef.current, {
+        scale,
+        useCORS: true,
+        backgroundColor: null,
+        logging: false,
+      });
+
+      return new Promise((resolve) => {
+        canvas.toBlob(
+          (blob) => resolve(blob),
+          `image/${exportFormat}`,
+          exportFormat === 'jpeg' ? 0.95 : 1
+        );
+      });
+    } catch (error) {
+      console.error('Generation error:', error);
+      return null;
+    }
+  };
+
   const handleExport = async () => {
     if (!exportRef.current || !selectedTemplate) {
       toast.error('Ошибка', { description: 'Не удалось создать открытку' });
@@ -193,45 +218,80 @@ const Index = () => {
     setIsExporting(true);
     toast.info('Генерация открытки...', { description: 'Пожалуйста, подождите' });
 
-    try {
-      const scale = exportQuality === 'high' ? 3 : exportQuality === 'medium' ? 2 : 1;
-      
-      const canvas = await html2canvas(exportRef.current, {
-        scale,
-        useCORS: true,
-        backgroundColor: null,
-        logging: false,
-      });
-
-      canvas.toBlob(
-        (blob) => {
-          if (!blob) {
-            toast.error('Ошибка экспорта', { description: 'Не удалось создать файл' });
-            setIsExporting(false);
-            return;
-          }
-
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          const fileName = `открытка-${selectedTemplate.title.toLowerCase().replace(/\s+/g, '-')}.${exportFormat}`;
-          link.href = url;
-          link.download = fileName;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-
-          toast.success('Готово!', { description: `Открытка сохранена как ${fileName}` });
-          setIsExporting(false);
-        },
-        `image/${exportFormat}`,
-        exportFormat === 'jpeg' ? 0.95 : 1
-      );
-    } catch (error) {
-      console.error('Export error:', error);
-      toast.error('Ошибка', { description: 'Не удалось экспортировать открытку' });
+    const blob = await generateCardBlob();
+    
+    if (!blob) {
+      toast.error('Ошибка экспорта', { description: 'Не удалось создать файл' });
       setIsExporting(false);
+      return;
     }
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const fileName = `открытка-${selectedTemplate.title.toLowerCase().replace(/\s+/g, '-')}.${exportFormat}`;
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast.success('Готово!', { description: `Открытка сохранена как ${fileName}` });
+    setIsExporting(false);
+  };
+
+  const handleShare = async () => {
+    if (!exportRef.current || !selectedTemplate) {
+      toast.error('Ошибка', { description: 'Нет открытки для отправки' });
+      return;
+    }
+
+    setIsExporting(true);
+    toast.info('Подготовка к отправке...', { description: 'Пожалуйста, подождите' });
+
+    const blob = await generateCardBlob();
+    
+    if (!blob) {
+      toast.error('Ошибка', { description: 'Не удалось подготовить открытку' });
+      setIsExporting(false);
+      return;
+    }
+
+    const fileName = `открытка-${selectedTemplate.title.toLowerCase().replace(/\s+/g, '-')}.${exportFormat}`;
+    const file = new File([blob], fileName, { type: `image/${exportFormat}` });
+
+    if (navigator.share && navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({
+          title: `Праздничная открытка: ${selectedTemplate.title}`,
+          text: greetingText || 'Поздравляю!',
+          files: [file],
+        });
+        toast.success('Отправлено!', { description: 'Открытка успешно отправлена' });
+      } catch (error) {
+        if ((error as Error).name !== 'AbortError') {
+          toast.error('Ошибка', { description: 'Не удалось отправить' });
+        }
+      }
+    } else {
+      const url = URL.createObjectURL(blob);
+      const shareText = `${greetingText || 'Поздравляю!'} — открытка создана в Праздничных открытках`;
+      
+      const emailSubject = encodeURIComponent(`Праздничная открытка: ${selectedTemplate.title}`);
+      const emailBody = encodeURIComponent(`${shareText}\n\nСмотрите во вложении!`);
+      
+      window.open(`mailto:?subject=${emailSubject}&body=${emailBody}`, '_blank');
+      
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      link.click();
+      URL.revokeObjectURL(url);
+      
+      toast.success('Подготовлено!', { description: 'Открытка скачана, открыто письмо email' });
+    }
+
+    setIsExporting(false);
   };
 
   const selectedFontFamily = fonts.find(f => f.value === selectedFont)?.family || 'Cormorant, serif';
@@ -596,7 +656,13 @@ const Index = () => {
                         </>
                       )}
                     </Button>
-                    <Button variant="outline" size="lg" className="w-full gap-2">
+                    <Button 
+                      onClick={handleShare}
+                      variant="outline" 
+                      size="lg" 
+                      className="w-full gap-2"
+                      disabled={isExporting}
+                    >
                       <Icon name="Share2" size={18} />
                       Поделиться
                     </Button>
