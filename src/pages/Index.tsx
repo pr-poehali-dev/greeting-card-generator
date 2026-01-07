@@ -26,11 +26,13 @@ interface Sticker {
   id: string;
   position: { x: number; y: number };
   size: number;
+  rotation: number;
 }
 
 interface TextSettings {
   position: { x: number; y: number };
   isDragging: boolean;
+  rotation: number;
 }
 
 const Index = () => {
@@ -47,7 +49,8 @@ const Index = () => {
   const [customBgColor, setCustomBgColor] = useState('from-blue-100 to-purple-100');
   const [textSettings, setTextSettings] = useState<TextSettings>({ 
     position: { x: 50, y: 50 }, 
-    isDragging: false 
+    isDragging: false,
+    rotation: 0
   });
   const [isExporting, setIsExporting] = useState(false);
   
@@ -107,7 +110,7 @@ const Index = () => {
     setTextSize(24);
     setSelectedFont('cormorant');
     setCustomBgColor(template.bgColor);
-    setTextSettings({ position: { x: 50, y: 50 }, isDragging: false });
+    setTextSettings({ position: { x: 50, y: 50 }, isDragging: false, rotation: 0 });
     setIsEditorOpen(true);
   };
 
@@ -117,6 +120,7 @@ const Index = () => {
       id: Date.now().toString(),
       position: { x: Math.random() * 60 + 20, y: Math.random() * 60 + 20 },
       size: 48,
+      rotation: 0,
     };
     setStickers([...stickers, newSticker]);
   };
@@ -182,6 +186,30 @@ const Index = () => {
     setStickers(stickers.map(s => 
       s.id === id ? { ...s, size: newSize } : s
     ));
+  };
+
+  const rotateStickerLeft = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setStickers(stickers.map(s => 
+      s.id === id ? { ...s, rotation: s.rotation - 15 } : s
+    ));
+  };
+
+  const rotateStickerRight = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setStickers(stickers.map(s => 
+      s.id === id ? { ...s, rotation: s.rotation + 15 } : s
+    ));
+  };
+
+  const rotateTextLeft = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setTextSettings(prev => ({ ...prev, rotation: prev.rotation - 15 }));
+  };
+
+  const rotateTextRight = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setTextSettings(prev => ({ ...prev, rotation: prev.rotation + 15 }));
   };
 
   const generateCardBlob = async (): Promise<Blob | null> => {
@@ -424,7 +452,7 @@ const Index = () => {
                         left: `${sticker.position.x}%`,
                         top: `${sticker.position.y}%`,
                         fontSize: `${sticker.size}px`,
-                        transform: 'translate(-50%, -50%)',
+                        transform: `translate(-50%, -50%) rotate(${sticker.rotation}deg)`,
                       }}
                       onMouseDown={(e) => handleStickerMouseDown(sticker.id, e)}
                       onTouchStart={(e) => handleStickerMouseDown(sticker.id, e)}
@@ -438,7 +466,21 @@ const Index = () => {
                         >
                           <Icon name="X" size={14} className="text-white" />
                         </button>
-                        <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          className="absolute -top-2 -left-2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                          onClick={(e) => rotateStickerLeft(sticker.id, e)}
+                          title="Повернуть влево"
+                        >
+                          <Icon name="RotateCcw" size={14} className="text-white" />
+                        </button>
+                        <button
+                          className="absolute -bottom-2 -right-2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                          onClick={(e) => rotateStickerRight(sticker.id, e)}
+                          title="Повернуть вправо"
+                        >
+                          <Icon name="RotateCw" size={14} className="text-white" />
+                        </button>
+                        <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <input
                             type="range"
                             min="24"
@@ -459,7 +501,7 @@ const Index = () => {
                       style={{
                         left: `${textSettings.position.x}%`,
                         top: `${textSettings.position.y}%`,
-                        transform: 'translate(-50%, -50%)',
+                        transform: `translate(-50%, -50%) rotate(${textSettings.rotation}deg)`,
                       }}
                       onMouseDown={handleTextMouseDown}
                       onTouchStart={handleTextMouseDown}
@@ -474,7 +516,21 @@ const Index = () => {
                       >
                         {greetingText}
                       </p>
-                      <div className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        className="absolute -top-2 -left-2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                        onClick={rotateTextLeft}
+                        title="Повернуть влево"
+                      >
+                        <Icon name="RotateCcw" size={14} className="text-white" />
+                      </button>
+                      <button
+                        className="absolute -top-2 -right-2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                        onClick={rotateTextRight}
+                        title="Повернуть вправо"
+                      >
+                        <Icon name="RotateCw" size={14} className="text-white" />
+                      </button>
+                      <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Icon name="Move" size={16} className="text-primary" />
                       </div>
                     </div>
@@ -483,8 +539,9 @@ const Index = () => {
               )}
               <div className="mt-3 text-xs text-muted-foreground space-y-1">
                 <p><Icon name="MousePointer" size={12} className="inline mr-1" />Перетаскивайте элементы мышью или пальцем</p>
-                <p><Icon name="Maximize2" size={12} className="inline mr-1" />Наведите на стикер и используйте ползунок для изменения размера</p>
-                <p><Icon name="Scroll" size={12} className="inline mr-1" />Прокрутите колесико мыши на стикере для быстрого изменения размера</p>
+                <p><Icon name="RotateCw" size={12} className="inline mr-1" />Синие кнопки по углам — поворот элементов</p>
+                <p><Icon name="Maximize2" size={12} className="inline mr-1" />Ползунок под стикером для изменения размера</p>
+                <p><Icon name="Scroll" size={12} className="inline mr-1" />Колесико мыши на стикере для быстрого изменения размера</p>
               </div>
             </div>
 
@@ -693,7 +750,7 @@ const Index = () => {
                   left: `${sticker.position.x}%`,
                   top: `${sticker.position.y}%`,
                   fontSize: `${sticker.size * 2}px`,
-                  transform: 'translate(-50%, -50%)',
+                  transform: `translate(-50%, -50%) rotate(${sticker.rotation}deg)`,
                 }}
               >
                 {sticker.emoji}
@@ -706,7 +763,7 @@ const Index = () => {
                 style={{
                   left: `${textSettings.position.x}%`,
                   top: `${textSettings.position.y}%`,
-                  transform: 'translate(-50%, -50%)',
+                  transform: `translate(-50%, -50%) rotate(${textSettings.rotation}deg)`,
                 }}
               >
                 <p 
