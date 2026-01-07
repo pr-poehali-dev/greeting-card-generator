@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -26,6 +26,11 @@ interface Sticker {
   size: number;
 }
 
+interface TextSettings {
+  position: { x: number; y: number };
+  isDragging: boolean;
+}
+
 const Index = () => {
   const [selectedHoliday, setSelectedHoliday] = useState<Holiday>('newyear');
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -36,6 +41,14 @@ const Index = () => {
   const [textSize, setTextSize] = useState(24);
   const [selectedFont, setSelectedFont] = useState('cormorant');
   const [stickers, setStickers] = useState<Sticker[]>([]);
+  const [draggedStickerId, setDraggedStickerId] = useState<string | null>(null);
+  const [customBgColor, setCustomBgColor] = useState('from-blue-100 to-purple-100');
+  const [textSettings, setTextSettings] = useState<TextSettings>({ 
+    position: { x: 50, y: 50 }, 
+    isDragging: false 
+  });
+  
+  const previewRef = useRef<HTMLDivElement>(null);
 
   const templates: Template[] = [
     { id: 1, title: 'Снежная сказка', holiday: 'newyear', bgColor: 'from-blue-100 to-purple-100', emoji: '❄️' },
@@ -47,6 +60,19 @@ const Index = () => {
     { id: 7, title: 'Романтика', holiday: 'valentine', bgColor: 'from-red-100 to-pink-100', emoji: '❤️' },
     { id: 8, title: 'Любовь в сердцах', holiday: 'valentine', bgColor: 'from-pink-100 to-purple-100', emoji: '💕' },
     { id: 9, title: 'Нежность', holiday: 'valentine', bgColor: 'from-rose-100 to-red-100', emoji: '💖' },
+  ];
+
+  const bgColorOptions = [
+    { label: 'Зимнее небо', value: 'from-blue-100 to-purple-100' },
+    { label: 'Золотой закат', value: 'from-amber-100 to-yellow-100' },
+    { label: 'Ночная магия', value: 'from-indigo-100 to-blue-100' },
+    { label: 'Розовая мечта', value: 'from-pink-100 to-rose-100' },
+    { label: 'Лиловый туман', value: 'from-purple-100 to-pink-100' },
+    { label: 'Персиковый рассвет', value: 'from-orange-100 to-amber-100' },
+    { label: 'Алая страсть', value: 'from-red-100 to-pink-100' },
+    { label: 'Нежная весна', value: 'from-rose-100 to-red-100' },
+    { label: 'Мятная свежесть', value: 'from-emerald-100 to-teal-100' },
+    { label: 'Лавандовые поля', value: 'from-violet-100 to-purple-100' },
   ];
 
   const fonts = [
@@ -76,6 +102,8 @@ const Index = () => {
     setStickers([]);
     setTextSize(24);
     setSelectedFont('cormorant');
+    setCustomBgColor(template.bgColor);
+    setTextSettings({ position: { x: 50, y: 50 }, isDragging: false });
     setIsEditorOpen(true);
   };
 
@@ -89,8 +117,67 @@ const Index = () => {
     setStickers([...stickers, newSticker]);
   };
 
-  const removeSticker = (id: string) => {
+  const removeSticker = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     setStickers(stickers.filter(s => s.id !== id));
+  };
+
+  const handleStickerMouseDown = (id: string, e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    setDraggedStickerId(id);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!previewRef.current) return;
+
+    const rect = previewRef.current.getBoundingClientRect();
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    
+    const x = ((clientX - rect.left) / rect.width) * 100;
+    const y = ((clientY - rect.top) / rect.height) * 100;
+
+    if (draggedStickerId) {
+      setStickers(stickers.map(s => 
+        s.id === draggedStickerId 
+          ? { ...s, position: { x: Math.max(0, Math.min(95, x)), y: Math.max(0, Math.min(95, y)) } }
+          : s
+      ));
+    }
+
+    if (textSettings.isDragging) {
+      setTextSettings(prev => ({
+        ...prev,
+        position: { x: Math.max(0, Math.min(100, x)), y: Math.max(0, Math.min(100, y)) }
+      }));
+    }
+  };
+
+  const handleMouseUp = () => {
+    setDraggedStickerId(null);
+    setTextSettings(prev => ({ ...prev, isDragging: false }));
+  };
+
+  const handleTextMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setTextSettings(prev => ({ ...prev, isDragging: true }));
+  };
+
+  const handleStickerWheel = (id: string, e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -4 : 4;
+    setStickers(stickers.map(s => 
+      s.id === id 
+        ? { ...s, size: Math.max(24, Math.min(120, s.size + delta)) }
+        : s
+    ));
+  };
+
+  const updateStickerSize = (id: string, newSize: number) => {
+    setStickers(stickers.map(s => 
+      s.id === id ? { ...s, size: newSize } : s
+    ));
   };
 
   const handleExport = () => {
@@ -200,33 +287,75 @@ const Index = () => {
           
           <div className="grid lg:grid-cols-[1fr_400px] gap-6">
             <div>
-              <h4 className="text-lg font-semibold mb-4">Предпросмотр</h4>
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-lg font-semibold">Предпросмотр</h4>
+                <div className="text-xs text-muted-foreground bg-accent px-3 py-1 rounded-full">
+                  <Icon name="Move" size={12} className="inline mr-1" />
+                  Перетаскивайте элементы
+                </div>
+              </div>
               {selectedTemplate && (
-                <div className={`aspect-[4/3] bg-gradient-to-br ${selectedTemplate.bgColor} rounded-lg flex items-center justify-center relative shadow-lg overflow-hidden`}>
-                  <div className="text-9xl mb-8 animate-float">{selectedTemplate.emoji}</div>
+                <div 
+                  ref={previewRef}
+                  className={`aspect-[4/3] bg-gradient-to-br ${customBgColor} rounded-lg flex items-center justify-center relative shadow-lg overflow-hidden select-none touch-none`}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={handleMouseUp}
+                  onTouchMove={handleMouseMove}
+                  onTouchEnd={handleMouseUp}
+                >
+                  <div className="text-9xl mb-8 animate-float pointer-events-none">{selectedTemplate.emoji}</div>
                   
                   {stickers.map((sticker) => (
                     <div
                       key={sticker.id}
-                      className="absolute cursor-pointer hover:scale-110 transition-transform group"
+                      className="absolute cursor-move group"
                       style={{
                         left: `${sticker.position.x}%`,
                         top: `${sticker.position.y}%`,
                         fontSize: `${sticker.size}px`,
+                        transform: 'translate(-50%, -50%)',
                       }}
-                      onClick={() => removeSticker(sticker.id)}
+                      onMouseDown={(e) => handleStickerMouseDown(sticker.id, e)}
+                      onTouchStart={(e) => handleStickerMouseDown(sticker.id, e)}
+                      onWheel={(e) => handleStickerWheel(sticker.id, e)}
                     >
-                      {sticker.emoji}
-                      <div className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Icon name="X" size={12} className="text-white" />
+                      <div className="relative">
+                        {sticker.emoji}
+                        <button
+                          className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                          onClick={(e) => removeSticker(sticker.id, e)}
+                        >
+                          <Icon name="X" size={14} className="text-white" />
+                        </button>
+                        <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <input
+                            type="range"
+                            min="24"
+                            max="120"
+                            value={sticker.size}
+                            onChange={(e) => updateStickerSize(sticker.id, parseInt(e.target.value))}
+                            className="w-20 h-1"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
                       </div>
                     </div>
                   ))}
                   
                   {greetingText && (
-                    <div className="absolute inset-0 flex items-center justify-center p-8 pointer-events-none">
+                    <div 
+                      className="absolute cursor-move group"
+                      style={{
+                        left: `${textSettings.position.x}%`,
+                        top: `${textSettings.position.y}%`,
+                        transform: 'translate(-50%, -50%)',
+                      }}
+                      onMouseDown={handleTextMouseDown}
+                      onTouchStart={handleTextMouseDown}
+                    >
                       <p 
-                        className="text-center text-primary/90 bg-white/75 backdrop-blur-sm rounded-lg p-6 shadow-lg"
+                        className="text-center text-primary/90 bg-white/75 backdrop-blur-sm rounded-lg p-6 shadow-lg group-hover:ring-2 group-hover:ring-primary/50 transition-all"
                         style={{ 
                           fontSize: `${textSize}px`,
                           fontFamily: selectedFontFamily,
@@ -235,19 +364,58 @@ const Index = () => {
                       >
                         {greetingText}
                       </p>
+                      <div className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Icon name="Move" size={16} className="text-primary" />
+                      </div>
                     </div>
                   )}
                 </div>
               )}
+              <div className="mt-3 text-xs text-muted-foreground space-y-1">
+                <p><Icon name="MousePointer" size={12} className="inline mr-1" />Перетаскивайте элементы мышью или пальцем</p>
+                <p><Icon name="Maximize2" size={12} className="inline mr-1" />Наведите на стикер и используйте ползунок для изменения размера</p>
+                <p><Icon name="Scroll" size={12} className="inline mr-1" />Прокрутите колесико мыши на стикере для быстрого изменения размера</p>
+              </div>
             </div>
 
             <div>
-              <Tabs defaultValue="text" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
+              <Tabs defaultValue="design" className="w-full">
+                <TabsList className="grid w-full grid-cols-4">
+                  <TabsTrigger value="design">Дизайн</TabsTrigger>
                   <TabsTrigger value="text">Текст</TabsTrigger>
                   <TabsTrigger value="stickers">Стикеры</TabsTrigger>
                   <TabsTrigger value="export">Экспорт</TabsTrigger>
                 </TabsList>
+
+                <TabsContent value="design" className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Цвет фона</label>
+                    <Select value={customBgColor} onValueChange={setCustomBgColor}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {bgColorOptions.map(option => (
+                          <SelectItem key={option.value} value={option.value}>
+                            <div className="flex items-center gap-2">
+                              <div className={`w-6 h-6 rounded bg-gradient-to-r ${option.value} border`}></div>
+                              <span>{option.label}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="p-4 bg-accent/50 rounded-lg space-y-2 text-sm">
+                    <p className="font-medium">Советы по дизайну:</p>
+                    <ul className="space-y-1 text-xs text-muted-foreground">
+                      <li>• Выбирайте контрастные цвета для читаемости</li>
+                      <li>• Не перегружайте открытку стикерами</li>
+                      <li>• Размещайте текст в центре или внизу</li>
+                    </ul>
+                  </div>
+                </TabsContent>
 
                 <TabsContent value="text" className="space-y-4">
                   <div>
@@ -298,7 +466,7 @@ const Index = () => {
                       Тематические стикеры
                       <span className="text-xs text-muted-foreground ml-2">(нажмите чтобы добавить)</span>
                     </label>
-                    <div className="grid grid-cols-6 gap-2">
+                    <div className="grid grid-cols-6 gap-2 max-h-64 overflow-y-auto">
                       {selectedTemplate && stickersByHoliday[selectedTemplate.holiday].map((emoji, index) => (
                         <Button
                           key={index}
@@ -328,11 +496,6 @@ const Index = () => {
                       </Button>
                     </div>
                   )}
-
-                  <div className="text-xs text-muted-foreground p-3 bg-accent/50 rounded-lg">
-                    <Icon name="Info" size={14} className="inline mr-1" />
-                    Кликните на стикер в превью, чтобы удалить его
-                  </div>
                 </TabsContent>
 
                 <TabsContent value="export" className="space-y-4">
